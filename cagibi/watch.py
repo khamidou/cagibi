@@ -7,7 +7,8 @@ class FileWatcher:
         self.paused = False
 
     def addHandler(self, fn):
-        """add an handler which is called everytime a change is detected. An handler function is a function which is called whenever a file change is detected.
+        """add an handler which is called everytime a change is detected. An handler function is a function which is called 
+        whenever a file change is detected.
         This function takes three parameters : a list of files modified, a list of files added and a list of files removed."""
         self.handlers.append(fn)
 
@@ -33,6 +34,7 @@ class FileWatcher:
 if __name__ == "__main__":
     def handler(m, a, r):
         print "added: %s, modified: %s, removed: %s" % (a, m, r)
+
     fw = FileWatcher()
     fw.addHandler(handler)
     fw.watch()
