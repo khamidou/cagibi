@@ -1,4 +1,4 @@
-from bottle import Bottle, route, run, post, put, delete, request, abort
+from bottle import Bottle, route, run, post, get, put, delete, request, abort
 import os, time
 import json
 from config import load_config, save_config
@@ -14,6 +14,8 @@ def filelist():
     for file in os.listdir(cagibi_folder):
        dir[file] = {}
        dir[file]["mtime"] = os.path.getmtime(os.path.join(cagibi_folder, file))
+       if file in files_info:
+           dir[file]["rev"] = files_info[file]["rev"]
 
     return json.dumps(dir)
 
@@ -51,11 +53,19 @@ def delete_file(filename):
     else:
         abort(501, "File doesn't exist or is not in database.")
 
+@get('/files/<filename>')
+def file_info(filename):
+    return json.dumps(files_info[filename])
 
-@post('/files/<filename>')
-def update_filename(filename):
+@post('/files/<filename>/deltas')
+def return_deltas(filename):
     """return the deltas corresponding to the file. The client must send in its request the hashes of the file"""  
-    return filename
+    hashes = json.load(request.forms.get("hashes"))
+    patchedfile = open(filename, "rb")
+    deltas = rsyncdelta(patchedfile, hashes)
+    patchedfile.close()
+
+    return json.dumps(deltas)
 
 if __name__ == "__main__":
     files_info = load_config(filename="files.json")
