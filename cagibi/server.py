@@ -1,6 +1,7 @@
-from bottle import Bottle, route, run
+from bottle import Bottle, route, run, post, request, abort
 import os, time
 import json
+from config import load_config, save_config
 
 cagibi_folder = "."
 files_info = {}
@@ -34,7 +35,23 @@ def create_file():
         save_config(files_info, filename="files.json")
         return "Ok."
     else:
-        abort(500, "File already exists")
+        abort(501, "File already exists")
+
+@post('/delete/<filename>')
+def delete_file(filename):
+    """Remove a file"""
+    filename = os.path.basename(filename)
+    print filename
+    
+    # FIXME: possible race condition
+    if os.path.exists(filename) and filename in files_info:
+        os.remove(filename)
+        del files_info[filename]
+        save_config(files_info, filename="files.json")
+        return "Ok."
+    else:
+        abort(501, "File doesn't exist or is not in database.")
+
 
 @post('/update/<filename>')
 def update_filename(filename):
