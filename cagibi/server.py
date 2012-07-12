@@ -4,6 +4,7 @@ import json
 from config import load_config, save_config
 
 cagibi_folder = "."
+server_config = {}
 files_info = {}
 
 @route('/folder')
@@ -30,7 +31,7 @@ def create_file(filename):
     
     # FIXME: possible race condition
     if not os.path.exists(filename) and filename not in files_info:
-        fd = open(filename, "wb")
+        fd = open(os.path.join(cagibi_folder, filename), "wb")
         fd.write(contents)
         fd.close()
         files_info[filename] = {"rev": 1}
@@ -46,7 +47,7 @@ def delete_file(filename):
     
     # FIXME: possible race condition
     if os.path.exists(filename) and filename in files_info:
-        os.remove(filename)
+        os.remove(os.path.join(cagibi_folder, filename))
         del files_info[filename]
         save_config(files_info, filename="files.json")
         return "Ok."
@@ -61,12 +62,16 @@ def file_info(filename):
 def return_deltas(filename):
     """return the deltas corresponding to the file. The client must send in its request the hashes of the file"""  
     hashes = json.load(request.forms.get("hashes"))
-    patchedfile = open(filename, "rb")
+    patchedfile = open(os.path.join(cagibi_folder, filename), "rb")
     deltas = rsyncdelta(patchedfile, hashes)
     patchedfile.close()
 
     return json.dumps(deltas)
 
 if __name__ == "__main__":
+    server_config = load_config("cagibi_server.json")
+    if "folder" in server_config:
+        cagibi_folder = server_config["folder"]
+
     files_info = load_config(filename="files.json")
     run(host='localhost', port=8080)
