@@ -1,0 +1,3 @@
+#!/bin/sh
+# a small script to run the server in the current directory.
+python ../cagibi/server.py 
