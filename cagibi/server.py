@@ -1,4 +1,4 @@
-from bottle import Bottle, route, run, post, request, abort
+from bottle import Bottle, route, run, post, put, delete, request, abort
 import os, time
 import json
 from config import load_config, save_config
@@ -17,13 +17,13 @@ def filelist():
 
     return json.dumps(dir)
 
-@post('/create/')
-def create_file():
+@put('/files/<filename>')
+def create_file(filename):
     """Create a file on the server. The method receives two POST parameters:
         - filename : the filename
         - contents : the contents
     """
-    filename = os.path.basename(request.forms.get('filename'))
+    filename = os.path.basename(filename)
     contents = request.forms.get('contents')
     
     # FIXME: possible race condition
@@ -37,11 +37,10 @@ def create_file():
     else:
         abort(501, "File already exists")
 
-@post('/delete/<filename>')
+@delete('/files/<filename>')
 def delete_file(filename):
     """Remove a file"""
     filename = os.path.basename(filename)
-    print filename
     
     # FIXME: possible race condition
     if os.path.exists(filename) and filename in files_info:
@@ -53,7 +52,7 @@ def delete_file(filename):
         abort(501, "File doesn't exist or is not in database.")
 
 
-@post('/update/<filename>')
+@post('/files/<filename>')
 def update_filename(filename):
     """return the deltas corresponding to the file. The client must send in its request the hashes of the file"""  
     return filename
