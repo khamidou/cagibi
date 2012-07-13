@@ -1,4 +1,4 @@
-from bottle import Bottle, route, run, post, get, put, delete, request, abort
+from bottle import Bottle, route, run, post, get, put, delete, request, abort, static_file
 import os, time
 import json
 from config import load_config, save_config
@@ -57,6 +57,10 @@ def delete_file(filename):
 @get('/files/<filename>')
 def file_info(filename):
     return json.dumps(files_info[filename])
+
+@get('/files/<filename>/data')
+def file_data(filename):
+    return static_file(filename, root=cagibi_folder)
 
 @post('/files/<filename>/deltas')
 def return_deltas(filename):
