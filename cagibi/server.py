@@ -2,6 +2,7 @@ from bottle import Bottle, route, run, post, get, put, delete, request, abort, s
 import os, time
 import json
 from config import load_config, save_config
+from rsync import rsyncdelta, blockchecksums, patchstream
 
 cagibi_folder = "."
 server_config = {}
@@ -65,7 +66,7 @@ def file_data(filename):
 @post('/files/<filename>/deltas')
 def return_deltas(filename):
     """return the deltas corresponding to the file. The client must send in its request the hashes of the file"""  
-    hashes = json.load(request.forms.get("hashes"))
+    hashes = json.loads(request.forms.get("hashes"))
     patchedfile = open(os.path.join(cagibi_folder, filename), "rb")
     deltas = rsyncdelta(patchedfile, hashes)
     patchedfile.close()
