@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from bottle import Bottle, route, run, post, get, put, delete, request, abort, static_file
 import os, time
 import json
