@@ -4,6 +4,7 @@ import os, time
 import json
 from config import load_config, save_config
 from rsync import rsyncdelta, blockchecksums, patchstream
+from util import secure_path
 
 cagibi_folder = "."
 server_config = {}
@@ -28,6 +29,7 @@ def create_file(filename):
         - filename : the filename
         - contents : the contents
     """
+    #FIXME: handle directories
     filename = os.path.basename(filename)
     contents = request.forms.get('contents')
     
@@ -48,13 +50,14 @@ def delete_file(filename):
     filename = os.path.basename(filename)
     
     # FIXME: possible race condition
+    print filename in files_info
     if os.path.exists(filename) and filename in files_info:
         os.remove(secure_path(cagibi_folder, filename))
         del files_info[filename]
         save_config(files_info, filename="files.json")
         return "Ok."
     else:
-        abort(501, "File doesn't exist or is not in database.")
+        abort(500, "File doesn't exist or is not in database.")
 
 @get('/files/<filename>')
 def file_info(filename):
@@ -70,6 +73,7 @@ def file_hashes(filename):
     """Return the hashes of a file"""
     unpatched = open(secure_path(cagibi_folder, filename), "rb")
     hashes = blockchecksums(unpatched)
+    print hashes
     unpatched.close()
     return json.dumps(hashes)
 
@@ -91,10 +95,10 @@ def update_file_hashes(filename):
     file_copy.close()
     save_to.close()
     
-    files_info[filename] = {"rev": 1}
+    files_info[filename] = {"rev": files_info[filename]["rev"] + 1}
     save_config(files_info, filename="files.json")
 
-    pass
+    return files_info[filename]
 
 @post('/files/<filename>/deltas')
 def return_deltas(filename):

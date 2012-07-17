@@ -8,8 +8,7 @@ class FileWatcher:
         self.paused = False
 
     def addHandler(self, fn):
-        """add an handler which is called everytime a change is detected. An handler function is a function which is called 
-        whenever a file change is detected.
+        """add an handler which is called everytime a change is detected. 
         This function takes three parameters : a list of files modified, a list of files added and a list of files removed."""
         self.handlers.append(fn)
 
@@ -22,7 +21,7 @@ class FileWatcher:
             after = dict ([(f, None) for f in os.listdir (self.path)])
             added = [f for f in after if not f in before]
             removed = [f for f in before if not f in after]
-            modified = [f for f in after if os.path.getmtime(f) > elapsed_time]
+            modified = [f for f in after if os.path.getmtime(os.path.join(self.path, f)) > elapsed_time and f not in added]
             
             for handler in self.handlers:
                 handler(modified, added, removed)

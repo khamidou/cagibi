@@ -15,10 +15,10 @@ cagibi_folder = "."
 
 
 def upload_local_changes(modified, added, removed):
-    pattern = "%s/files/%s/hashes" % server_url
 
     for file in modified:
-        url = pattern % file
+        print "Detect %s modified" % file
+        url = "%s/files/%s/hashes" % (server_url, file)
         fd = urllib2.urlopen(url)
         hashes = json.load(fd)
         patchedfile = open(secure_path(cagibi_folder, file), "rb")
@@ -30,6 +30,35 @@ def upload_local_changes(modified, added, removed):
         post_data["deltas"] = json.dumps(deltas)
         post_string = urllib.urlencode(post_data)
         fd = urllib2.urlopen(url, post_string)
+        results = json.load(fd)
+        
+        local_files = load_config("files.json")
+        local_files[file]["rev"] = results["rev"]
+        save_config("files.json")
+
+    opener = urllib2.build_opener(urllib2.HTTPHandler)
+
+    for file in added:
+        put_data = {}
+        fd = open(secure_path(cagibi_folder, file), "r")
+        put_data["contents"] = fd.read()
+        put_string = urllib.urlencode(put_data)
+        fd.close()
+
+        url = "%s/files/%s" % (server_url, file)
+        request = urllib2.Request(url, data=put_string)
+        request.add_header('Content-Type', 'application/json')
+        request.get_method = lambda: 'PUT'
+        url = opener.open(request)
+
+    for file in removed:
+        url = "%s/files/%s" % (server_url, file)
+        request = urllib2.Request(url, data=put_string)
+        request.get_method = lambda: 'DELETE'
+        url = opener.open(request)
+
+
+
 
 def checkout_upstream_changes():
     """Checkout changes on the server"""
@@ -94,7 +123,7 @@ if __name__ == "__main__":
     if "folder" in client_config:
         cagibi_folder = client_config["folder"]
 
-    fw = FileWatcher()
+    fw = FileWatcher(path=cagibi_folder)
     fw.addHandler(upload_local_changes)
     checkout_upstream_changes()
     fw.watch()
