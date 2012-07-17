@@ -16,7 +16,7 @@ def filelist():
 
     for file in os.listdir(cagibi_folder):
        dir[file] = {}
-       dir[file]["mtime"] = os.path.getmtime(os.path.join(cagibi_folder, file))
+       dir[file]["mtime"] = os.path.getmtime(secure_path(cagibi_folder, file))
        if file in files_info:
            dir[file]["rev"] = files_info[file]["rev"]
 
@@ -33,7 +33,7 @@ def create_file(filename):
     
     # FIXME: possible race condition
     if not os.path.exists(filename) and filename not in files_info:
-        fd = open(os.path.join(cagibi_folder, filename), "wb")
+        fd = open(secure_path(cagibi_folder, filename), "wb")
         fd.write(contents)
         fd.close()
         files_info[filename] = {"rev": 1}
@@ -49,7 +49,7 @@ def delete_file(filename):
     
     # FIXME: possible race condition
     if os.path.exists(filename) and filename in files_info:
-        os.remove(os.path.join(cagibi_folder, filename))
+        os.remove(secure_path(cagibi_folder, filename))
         del files_info[filename]
         save_config(files_info, filename="files.json")
         return "Ok."
@@ -62,13 +62,45 @@ def file_info(filename):
 
 @get('/files/<filename>/data')
 def file_data(filename):
+    """Return the contents of the file"""
     return static_file(filename, root=cagibi_folder)
+
+@get('/files/<filename>/hashes')
+def file_hashes(filename):
+    """Return the hashes of a file"""
+    unpatched = open(secure_path(cagibi_folder, filename), "rb")
+    hashes = blockchecksums(unpatched)
+    unpatched.close()
+    return json.dumps(hashes)
+
+@post('/files/<filename>/hashes')
+def update_file_hashes(filename):
+    """Updates a file using the deltas received by a client"""
+    deltas = json.loads(request.forms.get("hashes"))
+
+    unpatched = open(secure_path(cagibi_folder, filename), "rb")
+    save_to = os.tmpfile()
+    patchstream(unpatched, save_to, json_response)
+    unpatched.close()
+    os.unlink(secure_path(cagibi_folder, filename))
+    save_to.seek(0)
+
+    # FIXME: rename instead of copying ?
+    file_copy = open(secure_path(cagibi_folder, filename).encode('ascii', 'ignore'), "w+b")
+    file_copy.write(save_to.read())
+    file_copy.close()
+    save_to.close()
+    
+    files_info[filename] = {"rev": 1}
+    save_config(files_info, filename="files.json")
+
+    pass
 
 @post('/files/<filename>/deltas')
 def return_deltas(filename):
     """return the deltas corresponding to the file. The client must send in its request the hashes of the file"""  
     hashes = json.loads(request.forms.get("hashes"))
-    patchedfile = open(os.path.join(cagibi_folder, filename), "rb")
+    patchedfile = open(secure_path(cagibi_folder, filename), "rb")
     deltas = rsyncdelta(patchedfile, hashes)
     patchedfile.close()
 
