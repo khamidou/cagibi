@@ -22,7 +22,7 @@ def upload_local_changes(modified, added, removed):
         fd = urllib2.urlopen(url)
         hashes = json.load(fd)
         patchedfile = open(secure_path(cagibi_folder, file), "rb")
-        deltas = rsyncdelta(patchedfile, hashes)
+        deltas = list(rsyncdelta(patchedfile, hashes))
         patchedfile.close()
 
         # Send the deltas to the server.
@@ -85,7 +85,7 @@ def checkout_upstream_changes():
                 # Get it too, but using the rsync algo
 
                 unpatched = open(secure_path(cagibi_folder, file).encode('ascii', 'ignore'), "rb")
-                hashes = blockchecksums(unpatched) 
+                hashes = list(blockchecksums(unpatched))
                 json_hashes = json.dumps(hashes)
                 post_data = {}
                 post_data["hashes"] = json_hashes

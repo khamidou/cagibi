@@ -72,19 +72,18 @@ def file_data(filename):
 def file_hashes(filename):
     """Return the hashes of a file"""
     unpatched = open(secure_path(cagibi_folder, filename), "rb")
-    hashes = blockchecksums(unpatched)
-    print hashes
+    hashes = list(blockchecksums(unpatched))
     unpatched.close()
     return json.dumps(hashes)
 
 @post('/files/<filename>/hashes')
 def update_file_hashes(filename):
     """Updates a file using the deltas received by a client"""
-    deltas = json.loads(request.forms.get("hashes"))
+    deltas = json.loads(request.forms.get("deltas"))
 
     unpatched = open(secure_path(cagibi_folder, filename), "rb")
     save_to = os.tmpfile()
-    patchstream(unpatched, save_to, json_response)
+    patchstream(unpatched, save_to, deltas)
     unpatched.close()
     os.unlink(secure_path(cagibi_folder, filename))
     save_to.seek(0)
