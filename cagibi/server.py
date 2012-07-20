@@ -59,8 +59,7 @@ def delete_file(filename):
     filename = os.path.basename(filename)
     
     # FIXME: possible race condition
-    print filename in files_info
-    if os.path.exists(filename) and filename in files_info:
+    if os.path.exists(secure_path(cagibi_folder, filename)) and filename in files_info:
         os.remove(secure_path(cagibi_folder, filename))
         del files_info[filename]
         save_config(files_info, filename="files.json")
