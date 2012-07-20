@@ -53,7 +53,7 @@ def upload_local_changes(modified, added, removed):
 
     for file in removed:
         url = "%s/files/%s" % (server_url, file)
-        request = urllib2.Request(url, data=put_string)
+        request = urllib2.Request(url)
         request.get_method = lambda: 'DELETE'
         url = opener.open(request)
 

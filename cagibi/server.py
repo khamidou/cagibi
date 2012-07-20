@@ -13,15 +13,24 @@ files_info = {}
 @route('/folder')
 def filelist():
     """return a list of files with some metadata"""
-    dir = {}
+    folder = {}
+    files_info = load_config(filename="files.json")
 
     for file in os.listdir(cagibi_folder):
-       dir[file] = {}
-       dir[file]["mtime"] = os.path.getmtime(secure_path(cagibi_folder, file))
-       if file in files_info:
-           dir[file]["rev"] = files_info[file]["rev"]
+        folder[file] = {}
+        folder[file]["mtime"] = os.path.getmtime(secure_path(cagibi_folder, file))
 
-    return json.dumps(dir)
+        if file not in files_info:
+            # Automatically add new files
+            files_info[file] = {}
+            files_info[file]["rev"] = 1
+            # FIXME: don't save the data for every new file.
+            save_config(files_info, filename="files.json")
+        
+        folder[file]["rev"] = files_info[file]["rev"]
+
+
+    return json.dumps(folder)
 
 @put('/files/<filename>')
 def create_file(filename):
