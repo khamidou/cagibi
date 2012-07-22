@@ -1,18 +1,48 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# A note about how this file is organized:
+# The cagibi client uses to separate python threads
+# - the first one is used to detect file changes 
+# - the second one reacts to these changes and discusses with the server
+#
+# They communicate by using a shared message queue, mqueue, which is a dictionnary
+# containing three lists: added, modified, removed.
 
 from watch import FileWatcher
 from rsync import *
 from config import load_config, save_config
 from util import secure_path
+from Queue import Queue
 import urllib, urllib2
 import json
 import os
+import threading
+
 
 client_config = {}
 server_url = "http://localhost:8080/"
 cagibi_folder = "."
 
+mqueue = {}
+mqueue["added"] = Queue()
+mqueue["modified"] = Queue()
+mqueue["removed"] = Queue()
+
+
+def setup_filewatcher_thread():
+    fw = FileWatcher(path=cagibi_folder)
+    fw.addHandler(upload_local_changes)
+    fw.watch()
+
+def push_filewatcher_changes(modified, added, removed):
+    for file in added:
+        mqueue["added"].put(file)
+
+    for file in modified:
+        mqueue["modified"].put(file)
+
+    for file in removed:
+        mqueue["removed"].put(file)
 
 def upload_local_changes(modified, added, removed):
 
@@ -123,7 +153,8 @@ if __name__ == "__main__":
     if "folder" in client_config:
         cagibi_folder = client_config["folder"]
 
-    fw = FileWatcher(path=cagibi_folder)
-    fw.addHandler(upload_local_changes)
-    checkout_upstream_changes()
-    fw.watch()
+    checkoutThread = threading.Thread(target=checkout_upstream_changes)
+    checkoutThread.start()
+    filewatcherThread = threading.Thread(target=setup_filewatcher_thread)
+    filewatcherThread.start()
+
