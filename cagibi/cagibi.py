@@ -15,6 +15,7 @@ from util import secure_path
 from Queue import Queue
 import urllib, urllib2
 import json
+import time
 import os
 import threading
 
@@ -31,7 +32,7 @@ mqueue["removed"] = Queue()
 
 def setup_filewatcher_thread():
     fw = FileWatcher(path=cagibi_folder)
-    fw.addHandler(upload_local_changes)
+    fw.addHandler(push_filewatcher_changes)
     fw.watch()
 
 def push_filewatcher_changes(modified, added, removed):
@@ -44,9 +45,11 @@ def push_filewatcher_changes(modified, added, removed):
     for file in removed:
         mqueue["removed"].put(file)
 
-def upload_local_changes(modified, added, removed):
+def upload_local_changes():
+    """Upload on the server the changes detected by the filewatcher thread"""
 
-    for file in modified:
+    while not mqueue["modified"].empty():
+        file = mqueue["modified"].get()
         print "Detect %s modified" % file
         url = "%s/files/%s/hashes" % (server_url, file)
         fd = urllib2.urlopen(url)
@@ -56,6 +59,7 @@ def upload_local_changes(modified, added, removed):
         patchedfile.close()
 
         # Send the deltas to the server.
+        print "deltas: %s" % deltas
         post_data = {}
         post_data["deltas"] = json.dumps(deltas)
         post_string = urllib.urlencode(post_data)
@@ -68,7 +72,8 @@ def upload_local_changes(modified, added, removed):
 
     opener = urllib2.build_opener(urllib2.HTTPHandler)
 
-    for file in added:
+    while not mqueue["added"].empty():
+        file = mqueue["added"].get()
         put_data = {}
         fd = open(secure_path(cagibi_folder, file), "r")
         put_data["contents"] = fd.read()
@@ -81,14 +86,12 @@ def upload_local_changes(modified, added, removed):
         request.get_method = lambda: 'PUT'
         url = opener.open(request)
 
-    for file in removed:
+    while not mqueue["removed"].empty():
+        file = mqueue["removed"].get()
         url = "%s/files/%s" % (server_url, file)
         request = urllib2.Request(url)
         request.get_method = lambda: 'DELETE'
         url = opener.open(request)
-
-
-
 
 def checkout_upstream_changes():
     """Checkout changes on the server"""
@@ -143,6 +146,12 @@ def checkout_upstream_changes():
     if modified == True:
         save_config(local_files, filename="files.json") 
 
+def sync_changes():
+    while True:
+        checkout_upstream_changes()
+        time.sleep(60)
+        upload_local_changes()
+
 if __name__ == "__main__":
     client_config = load_config("cagibi.json")
     if "server" in client_config:
@@ -153,8 +162,8 @@ if __name__ == "__main__":
     if "folder" in client_config:
         cagibi_folder = client_config["folder"]
 
-    checkoutThread = threading.Thread(target=checkout_upstream_changes)
-    checkoutThread.start()
-    filewatcherThread = threading.Thread(target=setup_filewatcher_thread)
+    syncThread = threading.Thread(name="sync", target=sync_changes)
+    syncThread.start()
+    filewatcherThread = threading.Thread(name="filewatcher", target=setup_filewatcher_thread)
     filewatcherThread.start()
 
