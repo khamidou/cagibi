@@ -18,6 +18,7 @@ import json
 import time
 import os
 import threading
+import base64
 
 
 client_config = {}
@@ -51,11 +52,12 @@ def upload_local_changes():
     while not mqueue["modified"].empty():
         file = mqueue["modified"].get()
         print "Detect %s modified" % file
+
         url = "%s/files/%s/hashes" % (server_url, file)
         fd = urllib2.urlopen(url)
         hashes = json.load(fd)
         patchedfile = open(secure_path(cagibi_folder, file), "rb")
-        deltas = list(rsyncdelta(patchedfile, hashes))
+        deltas = encode_deltas(rsyncdelta(patchedfile, hashes))
         patchedfile.close()
 
         # Send the deltas to the server.
@@ -74,6 +76,8 @@ def upload_local_changes():
 
     while not mqueue["added"].empty():
         file = mqueue["added"].get()
+        print "Detected %s added" % file
+
         put_data = {}
         fd = open(secure_path(cagibi_folder, file), "r")
         put_data["contents"] = fd.read()
@@ -88,6 +92,8 @@ def upload_local_changes():
 
     while not mqueue["removed"].empty():
         file = mqueue["removed"].get()
+        print "Detect %s removed" % file
+
         url = "%s/files/%s" % (server_url, file)
         request = urllib2.Request(url)
         request.get_method = lambda: 'DELETE'
@@ -117,7 +123,7 @@ def checkout_upstream_changes():
             if server_files[file]["rev"] > local_files[file]["rev"]:
                 # Get it too, but using the rsync algo
 
-                unpatched = open(secure_path(cagibi_folder, file).encode('ascii', 'ignore'), "rb")
+                unpatched = open(secure_path(cagibi_folder, file), "rb")
                 hashes = list(blockchecksums(unpatched))
                 json_hashes = json.dumps(hashes)
                 post_data = {}
@@ -126,7 +132,7 @@ def checkout_upstream_changes():
 
                 url = "%s/files/%s/deltas" % (server_url, file) 
                 fd = urllib2.urlopen(url, post_string)
-                json_response = json.load(fd)
+                json_response = decode_deltas(json.load(fd))
 
                 unpatched.seek(0)
                 save_to = os.tmpfile()
@@ -136,7 +142,7 @@ def checkout_upstream_changes():
                 save_to.seek(0)
                 
                 # FIXME: rename instead of copying ?
-                file_copy = open(secure_path(cagibi_folder, file).encode('ascii', 'ignore'), "w+b")
+                file_copy = open(secure_path(cagibi_folder, file), "w+b")
                 file_copy.write(save_to.read())
                 file_copy.close()
                 save_to.close()

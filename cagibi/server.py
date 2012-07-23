@@ -2,8 +2,9 @@
 from bottle import Bottle, route, run, post, get, put, delete, request, abort, static_file
 import os, time
 import json
+import base64
 from config import load_config, save_config
-from rsync import rsyncdelta, blockchecksums, patchstream
+from rsync import rsyncdelta, blockchecksums, patchstream, encode_deltas, decode_deltas
 from util import secure_path
 
 cagibi_folder = "."
@@ -87,7 +88,8 @@ def file_hashes(filename):
 @post('/files/<filename>/hashes')
 def update_file_hashes(filename):
     """Updates a file using the deltas received by a client"""
-    deltas = json.loads(request.forms.get("deltas"))
+    deltas = decode_deltas(json.loads(request.forms.get("deltas")))
+    print deltas
 
     unpatched = open(secure_path(cagibi_folder, filename), "rb")
     save_to = os.tmpfile()
@@ -97,7 +99,7 @@ def update_file_hashes(filename):
     save_to.seek(0)
 
     # FIXME: rename instead of copying ?
-    file_copy = open(secure_path(cagibi_folder, filename).encode('ascii', 'ignore'), "w+b")
+    file_copy = open(secure_path(cagibi_folder, filename), "w+b")
     file_copy.write(save_to.read())
     file_copy.close()
     save_to.close()
@@ -112,7 +114,7 @@ def return_deltas(filename):
     """return the deltas corresponding to the file. The client must send in its request the hashes of the file"""  
     hashes = json.loads(request.forms.get("hashes"))
     patchedfile = open(secure_path(cagibi_folder, filename), "rb")
-    deltas = rsyncdelta(patchedfile, hashes)
+    deltas = encode_deltas(rsyncdelta(patchedfile, hashes))
     patchedfile.close()
 
     return json.dumps(deltas)

@@ -26,6 +26,7 @@ http://samba.anu.edu.au/rsync/.
 
 import collections
 import hashlib
+import base64
 
 if not(hasattr(__builtins__, "bytes")) or str is bytes:
     # Python 2.x compatibility
@@ -36,7 +37,7 @@ if not(hasattr(__builtins__, "bytes")) or str is bytes:
             return map(ord, var)
 
 __all__ = ["rollingchecksum", "weakchecksum", "patchstream", "rsyncdelta",
-    "blockchecksums"]
+    "blockchecksums", "encode_deltas", "decode_deltas"]
 
 
 def rsyncdelta(datastream, remotesignatures, blocksize=4096):
@@ -174,3 +175,27 @@ def weakchecksum(data):
         b += (l - i)*data[i]
 
     return (b << 16) | a, a, b
+
+def encode_deltas(deltas):
+    """
+    Returns base64-encoded rsync deltas
+    """
+    def discriminator(element):
+        if isinstance(element, unicode):
+            return base64.b64encode(element)
+        else:
+            return element
+
+    return map(discriminator, deltas)
+
+def decode_deltas(deltas):
+    """
+    Return normal unicode strings in base64-encoded rsync deltas
+    """
+    def discriminator(element):
+        if isinstance(element, str):
+            return base64.b64decode(element)
+        else:
+            return element
+
+    return map(discriminator, deltas)
