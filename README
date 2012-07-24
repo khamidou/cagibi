@@ -1,0 +1,10 @@
+Cagibi is a personal dropbox-like service. Its goal is to synchronize a folder
+between a server and many clients. It uses the rsync algorithm to do so.
+
+Testing
+=======
+
+To test cagibi locally, you'll have to cd into tests/server and run the 
+"runserver" script.
+After that, cd into tests/client and run "runclient". Any changes to the
+"client_dir" directory should be reflected on the server.
