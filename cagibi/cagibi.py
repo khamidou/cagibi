@@ -14,6 +14,7 @@ from config import load_config, save_config
 from util import secure_path
 from Queue import Queue
 import urllib, urllib2
+from urllib2 import HTTPError
 import json
 import time
 import os
@@ -35,6 +36,7 @@ def setup_filewatcher_thread():
     fw = FileWatcher(path=cagibi_folder)
     fw.addHandler(push_filewatcher_changes)
     fw.watch()
+    print "ended"
 
 def push_filewatcher_changes(modified, added, removed):
     for file in added:
@@ -54,11 +56,22 @@ def upload_local_changes():
         print "Detect %s modified" % file
 
         url = "%s/files/%s/hashes" % (server_url, file)
-        fd = urllib2.urlopen(url)
+        try:
+            fd = urllib2.urlopen(url)
+        except HTTPError:
+            # The server may return us an error if things have gone south during
+            # the file creation process.
+            mqueue["added"].put(file)
+            continue
+
         hashes = json.load(fd)
-        patchedfile = open(secure_path(cagibi_folder, file), "rb")
-        deltas = encode_deltas(rsyncdelta(patchedfile, hashes))
-        patchedfile.close()
+        try:
+            patchedfile = open(secure_path(cagibi_folder, file), "rb")
+            deltas = encode_deltas(rsyncdelta(patchedfile, hashes))
+            patchedfile.close()
+        except IOError:
+            "IOError - continuing"
+            continue
 
         # Send the deltas to the server.
         print "deltas: %s" % deltas
@@ -79,10 +92,14 @@ def upload_local_changes():
         print "Detected %s added" % file
 
         put_data = {}
-        fd = open(secure_path(cagibi_folder, file), "r")
-        put_data["contents"] = fd.read()
-        put_string = urllib.urlencode(put_data)
-        fd.close()
+        try:
+            fd = open(secure_path(cagibi_folder, file), "r")
+            put_data["contents"] = fd.read()
+            put_string = urllib.urlencode(put_data)
+            fd.close()
+        except IOError, e:
+            print e
+            continue
 
         url = "%s/files/%s" % (server_url, file)
         request = urllib2.Request(url, data=put_string)
@@ -123,8 +140,12 @@ def checkout_upstream_changes():
             if server_files[file]["rev"] > local_files[file]["rev"]:
                 # Get it too, but using the rsync algo
 
-                unpatched = open(secure_path(cagibi_folder, file), "rb")
-                hashes = list(blockchecksums(unpatched))
+                try:
+                    unpatched = open(secure_path(cagibi_folder, file), "rb")
+                    hashes = list(blockchecksums(unpatched))
+                except IOError:
+                    continue
+
                 json_hashes = json.dumps(hashes)
                 post_data = {}
                 post_data["hashes"] = json_hashes
@@ -142,12 +163,16 @@ def checkout_upstream_changes():
                 save_to.seek(0)
                 
                 # FIXME: rename instead of copying ?
-                file_copy = open(secure_path(cagibi_folder, file), "w+b")
-                file_copy.write(save_to.read())
-                file_copy.close()
+                try:
+                    file_copy = open(secure_path(cagibi_folder, file), "w+b")
+                    file_copy.write(save_to.read())
+                    file_copy.close()
+                    local_files[file]["rev"] = server_files[file]["rev"] 
+                except IOError:
+                    continue
+
                 save_to.close()
-                
-                local_files[file]["rev"] = server_files[file]["rev"] 
+
 
     if modified == True:
         save_config(local_files, filename="files.json") 
@@ -155,7 +180,7 @@ def checkout_upstream_changes():
 def sync_changes():
     while True:
         checkout_upstream_changes()
-        time.sleep(60)
+        time.sleep(10)
         upload_local_changes()
 
 if __name__ == "__main__":
