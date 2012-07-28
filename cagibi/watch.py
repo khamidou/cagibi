@@ -17,12 +17,12 @@ class FileWatcher:
         
         while not self.paused:
             elapsed_time = time.time()
-            time.sleep (10)
+            time.sleep(10)
             after = dict ([(f, None) for f in os.listdir (self.path)])
             added = [f for f in after if not f in before]
             removed = [f for f in before if not f in after]
             modified = [f for f in after if os.path.getmtime(os.path.join(self.path, f)) > elapsed_time and f not in added]
-            
+
             for handler in self.handlers:
                 handler(modified, added, removed)
 

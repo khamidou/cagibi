@@ -36,7 +36,6 @@ def setup_filewatcher_thread():
     fw = FileWatcher(path=cagibi_folder)
     fw.addHandler(push_filewatcher_changes)
     fw.watch()
-    print "ended"
 
 def push_filewatcher_changes(modified, added, removed):
     for file in added:
@@ -54,27 +53,30 @@ def upload_local_changes():
     while not mqueue["modified"].empty():
         file = mqueue["modified"].get()
         print "Detect %s modified" % file
-
+    
         url = "%s/files/%s/hashes" % (server_url, file)
         try:
             fd = urllib2.urlopen(url)
         except HTTPError:
             # The server may return us an error if things have gone south during
             # the file creation process.
+            # If so, mark the file as added instead of modified.
+            print "mark as added instead"
             mqueue["added"].put(file)
             continue
 
         hashes = json.load(fd)
         try:
+            print "%f" % os.path.getmtime(secure_path(cagibi_folder, file))
             patchedfile = open(secure_path(cagibi_folder, file), "rb")
             deltas = encode_deltas(rsyncdelta(patchedfile, hashes))
             patchedfile.close()
+            print "%f" % os.path.getmtime(secure_path(cagibi_folder, file))
         except IOError:
             "IOError - continuing"
             continue
 
         # Send the deltas to the server.
-        print "deltas: %s" % deltas
         post_data = {}
         post_data["deltas"] = json.dumps(deltas)
         post_string = urllib.urlencode(post_data)
@@ -84,6 +86,7 @@ def upload_local_changes():
         local_files = load_config("files.json")
         local_files[file]["rev"] = results["rev"]
         save_config("files.json")
+        print "%f" % os.path.getmtime(secure_path(cagibi_folder, file))
 
     opener = urllib2.build_opener(urllib2.HTTPHandler)
 
@@ -139,6 +142,7 @@ def checkout_upstream_changes():
         else:
             if server_files[file]["rev"] > local_files[file]["rev"]:
                 # Get it too, but using the rsync algo
+                print "Retrieving file, using the rsync algorithm"
 
                 try:
                     unpatched = open(secure_path(cagibi_folder, file), "rb")
@@ -168,6 +172,7 @@ def checkout_upstream_changes():
                     file_copy.write(save_to.read())
                     file_copy.close()
                     local_files[file]["rev"] = server_files[file]["rev"] 
+                    modified = True
                 except IOError:
                     continue
 
