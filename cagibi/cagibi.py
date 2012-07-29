@@ -31,6 +31,12 @@ mqueue["added"] = Queue()
 mqueue["modified"] = Queue()
 mqueue["removed"] = Queue()
 
+# The list of modified files is used when a file has been
+# modified by the client itself, so that it doesn't try to
+# upload it again to the server in a never-ending loop.
+# No need for a mutex as it's thread-local
+mqueue["client_modified"] = []
+
 
 def setup_filewatcher_thread():
     fw = FileWatcher(path=cagibi_folder)
@@ -52,6 +58,10 @@ def upload_local_changes():
 
     while not mqueue["modified"].empty():
         file = mqueue["modified"].get()
+        
+        if file in mqueue["client_modified"]:
+            continue
+
         print "Detect %s modified" % file
     
         url = "%s/files/%s/hashes" % (server_url, file)
@@ -85,7 +95,7 @@ def upload_local_changes():
         
         local_files = load_config("files.json")
         local_files[file]["rev"] = results["rev"]
-        save_config("files.json")
+        save_config(local_files, filename="files.json") 
         print "%f" % os.path.getmtime(secure_path(cagibi_folder, file))
 
     opener = urllib2.build_opener(urllib2.HTTPHandler)
@@ -173,6 +183,7 @@ def checkout_upstream_changes():
                     file_copy.close()
                     local_files[file]["rev"] = server_files[file]["rev"] 
                     modified = True
+                    mqueue["client_modified"].append(file)
                 except IOError:
                     continue
 
@@ -185,6 +196,7 @@ def checkout_upstream_changes():
 def sync_changes():
     while True:
         checkout_upstream_changes()
+        mqueue["client_modified"] = []
         time.sleep(10)
         upload_local_changes()
 
