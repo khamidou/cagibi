@@ -5,6 +5,15 @@ Testing
 =======
 
 To test cagibi locally, you'll have to cd into tests/server and run the 
-"runserver" script.
-After that, cd into tests/client and run "runclient". Any changes to the
-"client_dir" directory should be reflected on the server.
+"runserver" script. After that, cd into tests/client and run "runclient". 
+Any changes to the "client_dir" directory should be reflected on the server.
+
+Limitations
+===========
+
+For the time, cagibi only supports files, not folders.
+
+Why Cagibi ?
+============
+
+In french, a cagibi is a very small space where you store stuff.
