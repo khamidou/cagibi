@@ -57,6 +57,10 @@ def upload_local_changes():
         url = "%s/files/%s/hashes" % (server_url, file)
         try:
             fd = urllib2.urlopen(url)
+        except URLError, e:
+                if hasattr(e, 'reason'):
+                    mqueue.postponed_modified.append(file)
+                    continue
         except HTTPError:
             # The server may return us an error if things have gone south during
             # the file creation process.
@@ -71,7 +75,10 @@ def upload_local_changes():
             deltas = encode_deltas(rsyncdelta(patchedfile, hashes))
             patchedfile.close()
         except IOError:
-            "IOError - continuing"
+            print "IOError - continuing"
+            # The file may be locked by another process
+            # Add it to the postponed list. 
+            mqueue.postponed_modified.append(file)
             continue
 
         # Send the deltas to the server.
@@ -84,7 +91,6 @@ def upload_local_changes():
         local_files = load_config("files.json")
         local_files[file]["rev"] = results["rev"]
         save_config(local_files, filename="files.json") 
-        print "%f" % os.path.getmtime(secure_path(cagibi_folder, file))
 
     opener = urllib2.build_opener(urllib2.HTTPHandler)
 
@@ -111,6 +117,11 @@ def upload_local_changes():
             local_files = load_config("files.json")
             local_files[file] = {"rev": 1}
             save_config(local_files, filename="files.json") 
+
+        except URLError, e:
+            if hasattr(e, 'reason'):
+                mqueue.postponed_added.append(file)
+                continue
         except HTTPError:
             continue
 
@@ -123,6 +134,10 @@ def upload_local_changes():
         request.get_method = lambda: 'DELETE'
         try:
             url = opener.open(request)
+        except URLError, e:
+            if hasattr(e, 'reason'):
+                mqueue.postponed_removed.append(file)
+                continue
         except HTTPError:
             continue
 
@@ -212,6 +227,21 @@ def sync_changes():
     while True:
         checkout_upstream_changes()
         mqueue.client_modified = []
+
+        # Put the contents of the postponed queues
+        # back into the processing queues.
+        while len(mqueue.postponed_added) != 0:
+            file = mqueue.postponed_added.pop()
+            mqueue.added.put(file)
+
+        while len(mqueue.postponed_modified) != 0:
+            file = mqueue.postponed_modified.pop()
+            mqueue.modified.put(file)
+        
+        while len(mqueue.postponed_removed) != 0:
+            file = mqueue.postponed_removed.pop()
+            mqueue.removed.put(file)
+
         time.sleep(10)
         upload_local_changes()
 
