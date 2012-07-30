@@ -106,7 +106,13 @@ def upload_local_changes():
         request = urllib2.Request(url, data=put_string)
         request.add_header('Content-Type', 'application/json')
         request.get_method = lambda: 'PUT'
-        url = opener.open(request)
+        try:
+            url = opener.open(request)
+            local_files = load_config("files.json")
+            local_files[file] = {"rev": 1}
+            save_config(local_files, filename="files.json") 
+        except HTTPError:
+            continue
 
     while not mqueue.removed.empty():
         file = mqueue.removed.get()
@@ -115,7 +121,10 @@ def upload_local_changes():
         url = "%s/files/%s" % (server_url, file)
         request = urllib2.Request(url)
         request.get_method = lambda: 'DELETE'
-        url = opener.open(request)
+        try:
+            url = opener.open(request)
+        except HTTPError:
+            continue
 
 def checkout_upstream_changes():
     """Checkout changes on the server"""
