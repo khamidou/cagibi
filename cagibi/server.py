@@ -89,7 +89,6 @@ def file_hashes(filename):
 def update_file_hashes(filename):
     """Updates a file using the deltas received by a client"""
     deltas = decode_deltas(json.loads(request.forms.get("deltas")))
-    print deltas
 
     unpatched = open(secure_path(cagibi_folder, filename), "rb")
     save_to = os.tmpfile()

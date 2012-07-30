@@ -13,3 +13,10 @@ class FileQueue(object):
         # upload it again to the server in a never-ending loop.
         # No need for a mutex as it's thread-local
         self.client_modified = []
+
+        # Those three lists contain files which should have been
+        # checked into the server, but weren't, because of a connectivity
+        # problem, for example.
+        self.postponed_added = []
+        self.postponed_modified = []
+        self.postponed_removed = []

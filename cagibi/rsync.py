@@ -181,7 +181,7 @@ def encode_deltas(deltas):
     Returns base64-encoded rsync deltas
     """
     def discriminator(element):
-        if isinstance(element, unicode):
+        if isinstance(element, unicode) or isinstance(element, str):
             return base64.b64encode(element)
         else:
             return element
@@ -192,8 +192,9 @@ def decode_deltas(deltas):
     """
     Return normal unicode strings in base64-encoded rsync deltas
     """
+    print deltas
     def discriminator(element):
-        if isinstance(element, str):
+        if isinstance(element, str) or isinstance(element, unicode):
             return base64.b64decode(element)
         else:
             return element

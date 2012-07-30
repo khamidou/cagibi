@@ -14,7 +14,7 @@ from config import load_config, save_config
 from util import secure_path
 from filequeue import FileQueue
 import urllib, urllib2
-from urllib2 import HTTPError
+from urllib2 import HTTPError, URLError
 import json
 import time
 import os
@@ -143,9 +143,12 @@ def upload_local_changes():
 
 def checkout_upstream_changes():
     """Checkout changes on the server"""
-    fd = urllib2.urlopen(server_url + "/folder")
-    server_files = json.load(fd)
-    fd.close()
+    try:
+        fd = urllib2.urlopen(server_url + "/folder")
+        server_files = json.load(fd)
+        fd.close()
+    except URLError:
+        return
 
     local_files = load_config("files.json")
 
