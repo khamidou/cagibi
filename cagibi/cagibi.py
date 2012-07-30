@@ -5,14 +5,14 @@
 # - the first one is used to detect file changes 
 # - the second one reacts to these changes and discusses with the server
 #
-# They communicate by using a shared message queue, mqueue, which is a dictionnary
-# containing three lists: added, modified, removed.
+# They communicate by using a shared message queue, mqueue, which is defined
+# in filequeue.py
 
 from watch import FileWatcher
 from rsync import *
 from config import load_config, save_config
 from util import secure_path
-from Queue import Queue
+from filequeue import FileQueue
 import urllib, urllib2
 from urllib2 import HTTPError
 import json
@@ -26,17 +26,7 @@ client_config = {}
 server_url = "http://localhost:8080/"
 cagibi_folder = "."
 
-mqueue = {}
-mqueue["added"] = Queue()
-mqueue["modified"] = Queue()
-mqueue["removed"] = Queue()
-
-# The list of modified files is used when a file has been
-# modified by the client itself, so that it doesn't try to
-# upload it again to the server in a never-ending loop.
-# No need for a mutex as it's thread-local
-mqueue["client_modified"] = []
-
+mqueue = FileQueue()
 
 def setup_filewatcher_thread():
     fw = FileWatcher(path=cagibi_folder)
@@ -45,21 +35,21 @@ def setup_filewatcher_thread():
 
 def push_filewatcher_changes(modified, added, removed):
     for file in added:
-        mqueue["added"].put(file)
+        mqueue.added.put(file)
 
     for file in modified:
-        mqueue["modified"].put(file)
+        mqueue.modified.put(file)
 
     for file in removed:
-        mqueue["removed"].put(file)
+        mqueue.removed.put(file)
 
 def upload_local_changes():
     """Upload on the server the changes detected by the filewatcher thread"""
 
-    while not mqueue["modified"].empty():
-        file = mqueue["modified"].get()
+    while not mqueue.modified.empty():
+        file = mqueue.modified.get()
         
-        if file in mqueue["client_modified"]:
+        if file in mqueue.client_modified:
             continue
 
         print "Detect %s modified" % file
@@ -72,16 +62,14 @@ def upload_local_changes():
             # the file creation process.
             # If so, mark the file as added instead of modified.
             print "mark as added instead"
-            mqueue["added"].put(file)
+            mqueue.added.put(file)
             continue
 
         hashes = json.load(fd)
         try:
-            print "%f" % os.path.getmtime(secure_path(cagibi_folder, file))
             patchedfile = open(secure_path(cagibi_folder, file), "rb")
             deltas = encode_deltas(rsyncdelta(patchedfile, hashes))
             patchedfile.close()
-            print "%f" % os.path.getmtime(secure_path(cagibi_folder, file))
         except IOError:
             "IOError - continuing"
             continue
@@ -100,8 +88,8 @@ def upload_local_changes():
 
     opener = urllib2.build_opener(urllib2.HTTPHandler)
 
-    while not mqueue["added"].empty():
-        file = mqueue["added"].get()
+    while not mqueue.added.empty():
+        file = mqueue.added.get()
         print "Detected %s added" % file
 
         put_data = {}
@@ -120,8 +108,8 @@ def upload_local_changes():
         request.get_method = lambda: 'PUT'
         url = opener.open(request)
 
-    while not mqueue["removed"].empty():
-        file = mqueue["removed"].get()
+    while not mqueue.removed.empty():
+        file = mqueue.removed.get()
         print "Detect %s removed" % file
 
         url = "%s/files/%s" % (server_url, file)
@@ -145,9 +133,17 @@ def checkout_upstream_changes():
             local_files[file] = {}
             local_files[file]["rev"] = server_files[file]["rev"]
             url = "%s/files/%s/data" % (server_url, file) 
-            urllib.urlretrieve(url, secure_path(cagibi_folder, file))
-            print "Retrieved %s" % file
-            modified = True
+            try:
+                urllib.urlretrieve(url, secure_path(cagibi_folder, file))
+                print "Retrieved %s" % file
+                modified = True
+            except URLError, e:
+                if hasattr(e, 'reason'):
+                        # Unable to reach network
+                        # Pass - the file will be downloaded later
+                        # as checkout_upstream_changes is called
+                        # repeatedly.
+                        continue
 
         else:
             if server_files[file]["rev"] > local_files[file]["rev"]:
@@ -166,7 +162,17 @@ def checkout_upstream_changes():
                 post_string = urllib.urlencode(post_data)
 
                 url = "%s/files/%s/deltas" % (server_url, file) 
-                fd = urllib2.urlopen(url, post_string)
+
+                try:
+                    fd = urllib2.urlopen(url, post_string)
+                except URLError, e:
+                    if hasattr(e, 'reason'):
+                        # Unable to reach network
+                        # Pass - the file will be downloaded later
+                        # as checkout_upstream_changes is called
+                        # repeatedly.
+                        continue
+
                 json_response = decode_deltas(json.load(fd))
 
                 unpatched.seek(0)
@@ -183,7 +189,7 @@ def checkout_upstream_changes():
                     file_copy.close()
                     local_files[file]["rev"] = server_files[file]["rev"] 
                     modified = True
-                    mqueue["client_modified"].append(file)
+                    mqueue.client_modified.append(file)
                 except IOError:
                     continue
 
@@ -196,7 +202,7 @@ def checkout_upstream_changes():
 def sync_changes():
     while True:
         checkout_upstream_changes()
-        mqueue["client_modified"] = []
+        mqueue.client_modified = []
         time.sleep(10)
         upload_local_changes()
 
