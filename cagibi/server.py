@@ -52,7 +52,7 @@ def create_file(filename):
         save_config(files_info, filename="files.json")
         return "Ok."
     else:
-        abort(501, "File already exists")
+        abort(400, "File already exists")
 
 @delete('/files/<filename>')
 def delete_file(filename):
