@@ -8,23 +8,28 @@
 # They communicate by using a shared message queue, mqueue, which is defined
 # in filequeue.py
 
+import urllib, urllib2
+import json
+import sys
+import time
+import os
+import threading
+import base64
+import argparse
+from urllib2 import HTTPError, URLError
+
+import config
+import gui
 from watch import FileWatcher
 from rsync import *
 from config import load_config, save_config
 from util import secure_path
 from filequeue import FileQueue
-import urllib, urllib2
-from urllib2 import HTTPError, URLError
-import json
-import time
-import os
-import threading
-import base64
-
 
 client_config = {}
 server_url = "http://localhost:8080/"
 cagibi_folder = "."
+debug_mode = False
 
 mqueue = FileQueue()
 
@@ -249,7 +254,27 @@ def sync_changes():
         upload_local_changes()
 
 if __name__ == "__main__":
-    client_config = load_config("cagibi.json")
+
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument("-d", "--debug", help="turn on debug mode", action="store_true")
+    argparser.add_argument("-c", "--config", help="specify config file path")
+    args = argparser.parse_args()
+
+    if args.debug:
+        debug_mode = True
+
+    config_path = ""
+    if not args.config:
+        config_path = config.get_config_path()
+    else:
+        config_path = args.config
+
+    try:
+        client_config = load_config(config_path)
+    except IOError:
+        print "Unable to load config file. Exiting."
+        sys.exit(-1)
+
     if "server" in client_config:
         server_url = client_config["server"]
         if server_url[-1] == '/':
